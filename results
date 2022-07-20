@@ -1,0 +1,135 @@
+#!/bin/bash
+
+cut -f1 -d ':' $1 > teams
+cut -f2 -d ':' $1 > scores
+
+teams1=( $(cut -f1 -d '-' teams | tr ' ' '_' ))
+teams2=( $(cut -f2 -d '-' teams | tr ' ' '_' ))
+score1=( $(cut -f1 -d '-' scores) )
+score2=( $(cut -f2 -d '-' scores) )
+
+length=$(echo ${#score1[@]})
+#echo ${length}
+
+win_score=3
+draw_score=1
+defeat_score=0
+
+touch temp # The file that will store the outputs before summing them and then sorting them
+rm -f temp
+touch temp
+
+for ((i=0; i < ${length}; i++))
+do
+	team1=${teams1[$i]}
+	team2=${teams2[$i]}
+	team1_sc=${score1[$i]}
+	team2_sc=${score2[$i]}
+
+	if [ "$team1_sc" -gt "$team2_sc" ] ; then # Team1 wins, Team2 loses
+		echo -e ${team1}"-"${win_score}'-'${team1_sc}'-'${team2_sc} >> temp
+		echo -e ${team2}"-"${defeat_score}'-'${team2_sc}'-'${team1_sc} >> temp
+	elif [ "$team1_sc" -eq "$team2_sc" ] ;	then # Draw
+		echo -e ${team1}'-'${draw_score}'-'${team1_sc}'-'${team2_sc} >> temp
+		echo -e ${team2}'-'${draw_score}'-'${team2_sc}'-'${team1_sc} >> temp
+	else # Team1 loses, Team2 wins
+		echo -e ${team1}'-'${defeat_score}'-'${team1_sc}'-'${team2_sc} >> temp
+		echo -e ${team2}'-'${win_score}'-'${team2_sc}'-'${team1_sc} >> temp
+	fi
+done
+
+touch teams
+touch scores
+rm -f teams
+rm -f scores
+
+# Sort the file according to the team names
+sort temp > sorted_temp
+rm -f temp
+
+# Isolate the number of times each team appears
+cut -f1 -d '-' sorted_temp > sorted_teams
+uniq -c sorted_teams > team_counts
+team_counts=( $(echo | tr -dc '[0-9\n]' < team_counts) )
+rm -f team_counts
+
+line_counter=0
+team_count_counter=0
+points=0
+its_score=0
+opp_score=0
+
+touch temp_output
+rm -f temp_output
+touch temp_output
+
+exec < sorted_temp
+while read line
+do
+
+	cur_counts=${team_counts[$team_count_counter]}
+
+	line_counter=$(($line_counter+1))
+
+	team=$(echo $line | cut -f1 -d '-' )
+
+	# Sum the points and the scores
+
+	new_points=$(echo $line | cut -f2 -d '-' )
+	let "points = points + new_points"
+
+	new_its_score=$(echo $line | cut -f3 -d '-' )
+	let "its_score = its_score + new_its_score"
+
+	new_opp_score=$(echo $line | cut -f4 -d '-' )
+	let "opp_score = opp_score + new_opp_score"
+
+	if [ "$cur_counts" -eq "$line_counter" ] ; then # Last line of current team
+
+		team_count_counter=$(($team_count_counter+1)) # Change team counts
+
+		echo -e ${team}"-"${points}'-'${its_score}'-'${opp_score} >> temp_output # Save the cur team to a temp file
+
+		# Reset the variables
+
+		line_counter=0
+		points=0
+		its_score=0
+		opp_score=0
+
+	fi
+
+done
+
+rm -f sorted_temp
+rm -f sorted_teams
+
+sort -t '-' -k2,2nr -k1,1gr temp_output > temp_output1
+rm -f temp_output
+
+line_counter=1
+
+exec < temp_output1
+while read line
+do
+
+	team=$(echo $line | cut -f1 -d '-' | tr '_' ' ' )
+	points=$(echo $line | cut -f2 -d '-' )
+	its_score=$(echo $line | cut -f3 -d '-' )
+	opp_score=$(echo $line | cut -f4 -d '-' )
+
+	length=${#team}
+
+	echo -e ${line_counter}.'\t'${team}"\t"${points}'\t'${its_score}'-'${opp_score}
+
+	#if [ "$length" -gt  7 ] ; then
+		#echo -e ${line_counter}.'\t'${team}"\t"${points}'\t'${its_score}'-'${opp_score}
+	#else
+		#echo -e ${line_counter}.'\t'${team}"\t\t"${points}'\t'${its_score}'-'${opp_score}
+	#fi
+
+	line_counter=$(($line_counter+1))
+
+done
+
+rm -f temp_output1

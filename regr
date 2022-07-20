@@ -1,0 +1,106 @@
+#!/bin/bash
+
+for file # For every file in the input
+do
+
+	# Acquire X and Y colums and store them in two arrays
+	x=( $(echo | cut -f1 -d ':' $file) )
+	y=( $(echo | cut -f2 -d ':' $file) )
+
+	# Acquire the length of the file
+	length=$(echo ${#x[@]})
+	#echo ${length}
+
+	same_val_cnt_X=1
+	same_val_cnt_Y=1
+
+	# Checking if X is a constant vector
+	for ((i=1; i < ${length}; i++))
+	do
+		comp1=0
+		comp2=0
+		let "comp1=`echo ${x[0]} - ${x[$i]}\>0 | bc `"
+		let "comp2=`echo ${x[0]} - ${x[$i]}\<0 | bc `"
+		if [ "${comp1}" -eq 0 ] && [ "${comp2}" -eq 0 ] ; then 
+			let 'same_val_cnt_X = same_val_cnt_X + 1'
+		fi
+	done
+
+	if [ "${same_val_cnt_X}" -eq "${length}" ] ; then # X is a constant vector
+
+		# Checking if Y is a constant vector
+		for ((i=1; i < ${length}; i++))
+		do
+			comp1=0
+			comp2=0
+			let "comp1=`echo ${y[0]} - ${y[$i]}\>0 | bc `"
+			let "comp2=`echo ${y[0]} - ${y[$i]}\<0 | bc `"
+			if [ "${comp1}" -eq 0 ] && [ "${comp2}" -eq 0 ] ; then 
+				let 'same_val_cnt_Y = same_val_cnt_Y + 1'
+			fi
+		done
+
+		if [ "${same_val_cnt_Y}" -eq "${length}" ] ; then  # Y (and X) is a constant vector
+
+			a=1
+			b=$(echo "scale=2; (${y[0]} - ${x[0]})" | bc)
+			c=1
+
+			for ((i=0; i < ${length}; i++))
+			do
+				err=$(echo "scale=10; ${err} + ((${y[$i]} - (${a} * ${x[$i]} + ${b})) * (${y[$i]} - (${a} * ${x[$i]} + ${b})))" | bc)
+			done
+
+			b=$(echo "scale=2; ${b}/1" | bc)
+			err=$(echo "scale=2; ${err}/1" | bc)
+
+			echo "FILE:" $file, "a="$a "b="$b "c="$c "err="$err
+			continue
+		else # Only X is a constant vector
+			b=$(echo "scale=2; (- ${x[0]}/1)" | bc)
+			echo "FILE:" $file, "a=1.00" "b="$b "c=0" "err=0"
+			continue
+		fi
+
+	fi
+
+	sum_x=0
+	sum_y=0
+	sum_xy=0
+	sum_x2=0
+
+	for ((i=0; i < ${length}; i++))
+	do
+		sum_x=$(echo "scale=10; ${sum_x} + ${x[$i]}" | bc)
+		sum_y=$(echo "scale=10; ${sum_y} + ${y[$i]}" | bc)
+		sum_xy=$(echo "scale=10; ${sum_xy} + (${x[$i]} * ${y[$i]})" | bc)
+		sum_x2=$(echo "scale=10; ${sum_x2} + (${x[$i]} * ${x[$i]})" | bc)
+	done
+
+	#echo $sum_x
+	#echo $sum_y
+	#echo $sum_xy
+	#echo $sum_x2
+
+	#Calculate the parameters a,b,c and the error err
+
+	a=0
+	b=0
+	c=1
+	err=0
+
+	a=$(echo "scale=10; ((${length} * ${sum_xy}) - (${sum_x} * ${sum_y})) / ((${length} * ${sum_x2}) - (${sum_x} * ${sum_x}))" | bc)
+	b=$(echo "scale=10; (${sum_y} - (${a} * ${sum_x})) / ${length}" | bc)
+
+	for ((i=0; i < ${length}; i++))
+	do
+		err=$(echo "scale=10; ${err} + ((${y[$i]} - (${a} * ${x[$i]} + ${b})) * (${y[$i]} - (${a} * ${x[$i]} + ${b})))" | bc)
+	done
+
+	a=$(echo "scale=2; ${a}/1" | bc)
+	b=$(echo "scale=2; ${b}/1" | bc)
+	err=$(echo "scale=2; ${err}/1" | bc)
+
+	echo "FILE:" $file, "a="$a "b="$b "c="$c "err="$err
+
+done
